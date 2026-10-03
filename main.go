@@ -1,265 +1,47 @@
 package main
 
 import (
-	"bufio"         // Для буферизованного и построчного чтения/записи (файлы, логи, stdin)
-	"bytes"         // Для работы с байтовыми буферами в памяти
-	"context"       // Для управления контекстом, таймаутами именами отмены операций
-	"encoding/json" // Для сериализации и десериализации JSON (API, конфиги)
-	"errors"        // Для создания, обертывания (wrapping) и проверки типов ошибок
-	"fmt"           // Для форматированного вывода и формирования строк
-	"io"            // Базовые интерфейсы io.Reader и io.Writer (фундамент Go)
-	"net"           // Для работы с сетевыми сокетами (TCP/UDP, проверка портов)
-	"net/http"      // Для создания HTTP-клиентов и REST HTTP-серверов
-	"os"            // Для работы с ОС: файлы, переменные окружения, процессы
-	"os/exec"       // Для запуска внешних бинарников и системных утилит (bash, git)
-	"os/signal"     // Для перехвата системных сигналов (SIGINT, SIGTERM)
-	"path/filepath" // Для кроссплатформенной работы с путями (Linux / Windows)
-	"strings"       // Для эффективной манипуляции со строками
-	"syscall"       // Низкоуровневые системные вызовы ядра
-	"time"          // Для работы со временем, длительностями (Duration) и таймерами
+	"bufio"
+	"fmt"
+	"os"
+	"strings"
 )
 
-// Config — структура для демонстрации работы с JSON.
-// Тэги `json:"..."` определяют имена полей в формате JSON.
-type Config struct {
-	ServerName string `json:"server_name"`
-	Port       int    `json:"port"`
-	Debug      bool   `json:"debug"`
-}
-
 func main() {
-	// =========================================================================
-	// 1. PACKAGE os (Операционная система и Файловая система)
-	// =========================================================================
-	// НАЗНАЧЕНИЕ: Прямое взаимодействие с ОС. Охватывает файлы, директории,
-	// переменные окружения и аргументы командной строки.
-	fmt.Println("=== 1. PACKAGE os ===")
+	
+	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Println("Welchen Ordner mochstest du erstellen ?")
+	
 
-	// os.MkdirAll: Рекурсивное создание папок (аналог `mkdir -p` в Linux).
-	// Права 0755: rwxr-xr-x (Владелец: все права, Группа/Другие: чтение и выполнение).
-	if err := os.MkdirAll("app_data/logs", 0755); err != nil {
-		fmt.Printf("Ошибка создания директории: %v\n", err)
-	}
-
-	// os.WriteFile: Быстрая запись среза байт []byte в файл.
-	// Права 0600: rw------- (Только владелец имеет доступ на чтение/запись).
-	logContent := []byte("2026-10-01 INFO Старт системы\n2026-10-01 ERROR Ошибка подключения\n")
-	if err := os.WriteFile("app_data/app.log", logContent, 0600); err != nil {
-		fmt.Printf("Ошибка записи файла: %v\n", err)
-	}
-
-	// os.ReadFile: Полное чтение файла в память.
-	// ВАЖНО: Используйте только для небольших файлов!
-	fileData, err := os.ReadFile("app_data/app.log")
-	if err == nil {
-		fmt.Println("Прочитанный файл:\n" + string(fileData))
-	}
-
-	// os.Stat & os.IsNotExist: Получение метаданных и правильная проверка существования файла.
-	fileInfo, err := os.Stat("app_data/app.log")
-	if err == nil {
-		fmt.Printf("Метаданные -> Имя: %s | Размер: %d байт | Права: %s\n",
-			fileInfo.Name(), fileInfo.Size(), fileInfo.Mode())
-	}
-
-	// Безопасная проверка: существует ли файл?
-	if _, err := os.Stat("non_existent_file.txt"); os.IsNotExist(err) {
-		fmt.Println("Проверка: Файл 'non_existent_file.txt' действительно отсутствует.")
-	}
-
-	// Переменные окружения (Environment Variables)
-	os.Setenv("APP_MODE", "production")
-	fmt.Println("Getenv APP_MODE:", os.Getenv("APP_MODE"))
-
-	// os.LookupEnv: Отличает пустую переменную от НЕУСТАНОВЛЕННОЙ.
-	if val, ok := os.LookupEnv("DATABASE_URL"); !ok {
-		fmt.Println("LookupEnv: Переменная 'DATABASE_URL' не задана в система.")
-	} else {
-		fmt.Println("DATABASE_URL:", val)
-	}
-
-	// Системные пути и аргументы
-	pwd, _ := os.Getwd()
-	home, _ := os.UserHomeDir()
-	fmt.Printf("Текущая папка (PWD): %s\nДомашняя папка: %s\n", pwd, home)
-	fmt.Println("Аргументы командной строки (os.Args):", os.Args)
-
-	// Потоки STDOUT / STDERR
-	os.Stdout.WriteString("Обычный вывод в STDOUT\n")
-	os.Stderr.WriteString("Вывод ошибки в STDERR\n")
-
-
-	// =========================================================================
-	// 2. PACKAGE path/filepath (Безопасная работа с путями)
-	// =========================================================================
-	// НАЗНАЧЕНИЕ: Кроссплатформенная сборка и разбор путей к файлам.
-	// ПРАВИЛО: Никогда не склеивайте пути через "+ /"! На Windows это вызовет баги.
-	fmt.Println("\n=== 2. PACKAGE path/filepath ===")
-
-	// filepath.Join: Корректно объединяет элементы пути с учетом ОС (/ для Linux, \ для Windows).
-	configPath := filepath.Join(home, ".config", "my_app", "config.json")
-	fmt.Println("Сконструированный путь:", configPath)
-
-	// Разбор пути на составляющие
-	fmt.Println("Директория (Dir):", filepath.Dir(configPath))
-	fmt.Println("Имя файла (Base):", filepath.Base(configPath))
-	fmt.Println("Расширение (Ext):", filepath.Ext(configPath))
-
-	// filepath.Abs: Преобразование относительного пути в абсолютный
-	absPath, _ := filepath.Abs(".")
-	fmt.Println("Абсолютный путь текущей папки:", absPath)
-
-
-	// =========================================================================
-	// 3. PACKAGES bufio & strings (Построчная работа и анализ текста)
-	// =========================================================================
-	// НАЗНАЧЕНИЕ: Потоковое чтение больших файлов без перегрузки ОЗУ и работа со строками.
-	fmt.Println("\n=== 3. PACKAGES bufio & strings ===")
-
-	// bufio.Scanner: Читает данные построчно (идеально для логов любой величины).
-	scanner := bufio.NewScanner(bytes.NewReader(fileData))
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Поиск подстроки с помощью пакета strings
-		if strings.Contains(line, "ERROR") {
-			fmt.Println("Найдены данные об ошибке:", strings.ToUpper(line))
+	for {
+		fmt.Print("Ordner Name: ")
+		
+		if !scanner.Scan(){
+			break
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Printf("Ошибка сканирования: %v\n", err)
-	}
 
+		OrderName := strings.TrimSpace(scanner.Text())
 
-	// =========================================================================
-	// 4. PACKAGE os/exec (Запуск внешних команд и системных утилит)
-	// =========================================================================
-	// НАЗНАЧЕНИЕ: Вызов любых консольных программ (bash, git, ffmpeg, docker).
-	fmt.Println("\n=== 4. PACKAGE os/exec ===")
-
-	// Выполнение простой команды
-	cmd := exec.Command("uname", "-a")
-	output, err := cmd.Output()
-	if err != nil {
-		// Извлечение детальной ошибки исполнения, если команда завершилась со статусом > 0
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			fmt.Printf("Команда завершилась с ошибкой: %s\n", string(exitErr.Stderr))
+		if OrderName == "" {
+			fmt.Println("Sie mussen ein Name Schreiben.")
+			continue
 		}
-	} else {
-		fmt.Print("Результат 'uname -a': ", string(output))
-	}
 
-	// Безопасное выполнение с ТАЙМАУТОМ через Context.
-	// Если команда зависнет, Go принудительно завершит процесс (SIGKILL).
-	execCtx, execCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer execCancel()
-
-	cmdTimeout := exec.CommandContext(execCtx, "sleep", "0.5")
-	if err := cmdTimeout.Run(); err != nil {
-		fmt.Println("Ошибка выполнения команды по таймауту:", err)
-	} else {
-		fmt.Println("Команда успешно выполнена в пределах таймаута.")
-	}
-
-
-	// =========================================================================
-	// 5. PACKAGE encoding/json (Сериализация и Десериализация JSON)
-	// =========================================================================
-	// НАЗНАЧЕНИЕ: Преобразование Go-структур в JSON и обратно.
-	fmt.Println("\n=== 5. PACKAGE encoding/json ===")
-
-	cfg := Config{ServerName: "Production-Node-01", Port: 8080, Debug: false}
-
-	// 1. json.MarshalIndent: Struct -> JSON []byte (с красивыми отступами для файлов)
-	jsonBytes, err := json.MarshalIndent(cfg, "", "  ")
-	if err == nil {
-		fmt.Println("Сгенерированный JSON:\n" + string(jsonBytes))
-	}
-
-	// 2. json.Unmarshal: JSON []byte -> Struct (парсинг входящих данных)
-	rawInput := []byte(`{"server_name":"Staging-Node","port":3000,"debug":true}`)
-	var parsedCfg Config
-	if err := json.Unmarshal(rawInput, &parsedCfg); err == nil {
-		fmt.Printf("Результат Unmarshal -> Сервер: %s | Порт: %d | Debug: %t\n",
-			parsedCfg.ServerName, parsedCfg.Port, parsedCfg.Debug)
-	}
-
-
-	// =========================================================================
-	// 6. PACKAGES net & net/http (Сетевые сокеты и HTTP-запросы)
-	// =========================================================================
-	// НАЗНАЧЕНИЕ: Работа с сетями, проверка портов, отправка API-запросов.
-	fmt.Println("\n=== 6. PACKAGES net & net/http ===")
-
-	// 1. net.DialTimeout: Проверка доступности TCP-порта (Port Scanner / Healthcheck)
-	conn, err := net.DialTimeout("tcp", "1.1.1.1:53", 1*time.Second)
-	if err != nil {
-		fmt.Println("Порт 53 на 1.1.1.1 недоступен:", err)
-	} else {
-		fmt.Println("net.DialTimeout: TCP-порт 53 (Cloudflare DNS) ОТКРЫТ!")
-		conn.Close() // Всегда закрывайте сетевые соединения!
-	}
-
-	// 2. http.Client: Выполнение HTTP GET запросов.
-	// ПРАВИЛО: НИКОГДА не используйте http.Get() по умолчанию в продакшене.
-	// У него нет таймаута, и ваш сервис может зависнуть навсегда!
-	httpClient := &http.Client{
-		Timeout: 4 * time.Second,
-	}
-
-	resp, err := httpClient.Get("https://api.ipify.org?format=json")
-	if err != nil {
-		fmt.Println("Ошибка HTTP запроса:", err)
-	} else {
-		// КРИТИЧЕСКИ ВАЖНО: Вызов Body.Close() СТРОГО внутри блока 'if err == nil'
-		defer resp.Body.Close()
-
-		bodyBytes, err := io.ReadAll(resp.Body)
+		_, err := os.Stat(OrderName)
 		if err == nil {
-			fmt.Println("Ответ HTTP API (Внешний IP):", string(bodyBytes))
+			fmt.Println("Der Folder existiert schon")
+			continue
 		}
+
+		errMkDirFolder := os.MkdirAll(OrderName, 0755)
+
+		if errMkDirFolder != nil {
+			fmt.Println("Fehler beim Erstellen bon Folder " + OrderName)
+		} else {
+			fmt.Printf("Ordner '%s', wurde erfolgreich erstellt.\n", OrderName)
+		}
+
+		
+
 	}
-
-
-	// =========================================================================
-	// 7. PACKAGES os/signal & syscall (Graceful Shutdown / Перехват сигналов)
-	// =========================================================================
-	// НАЗНАЧЕНИЕ: Корректная остановка сервиса без потери данных при остановке
-	// системной службой (systemctl stop) или вручную (CTRL+C).
-	fmt.Println("\n=== 7. PACKAGES os/signal & syscall ===")
-
-	// Буферизованный канал для приема системных сигналов
-	sigChan := make(chan os.Signal, 1)
-	// Перехватываем SIGINT (CTRL+C) и SIGTERM (стандартный сигнал завершения в Docker/Linux)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	fmt.Println("Ожидание сигнала остановки или истечения таймаута...")
-
-	select {
-	case sig := <-sigChan:
-		fmt.Printf("Получен системный сигнал: %v! Начинаем очистку ресурсов...\n", sig)
-	case <-time.After(100 * time.Millisecond):
-		fmt.Println("Таймаут истек, сигналов от ОС не поступало. Продолжаем выполнение.")
-	}
-
-
-	// =========================================================================
-	// 8. PACKAGE errors (Продвинутая обработка ошибок)
-	// =========================================================================
-	// НАЗНАЧЕНИЕ: Создание, обертывание (wrapping) и сравнение ошибок.
-	fmt.Println("\n=== 8. PACKAGE errors ===")
-
-	var ErrNotFound = errors.New("ресурс не найден")
-
-	// Имитация обернутой ошибки (fmt.Errorf с флажком %w)
-	wrappedErr := fmt.Errorf("ошибка уровня базы данных: %w", ErrNotFound)
-
-	// errors.Is: Проверяет, содержится ли конкретная ошибка внутри цепочки ошибок
-	if errors.Is(wrappedErr, ErrNotFound) {
-		fmt.Println("errors.Is: Ошибка 'ErrNotFound' успешно распознана внутри цепочки!")
-	}
-
-	// Очистка созданных временных файлов
-	_ = os.RemoveAll("app_data")
-	fmt.Println("\nВсе временные файлы успешно удалены. Скрипт завершен!")
 }
