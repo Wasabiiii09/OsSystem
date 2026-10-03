@@ -38,7 +38,6 @@ func main() {
 		fmt.Println("1.Folder erstellen")
 		fmt.Println("2.Folder Loschen")
 		fmt.Println("3.Logs lessen")
-		fmt.Println("4.Folder lessen")
 
 		fmt.Printf("#: ")
 		if !scanner.Scan() {
@@ -221,63 +220,6 @@ func main() {
 					break
 				}
 				break
-
-			}
-		}
-
-		if UserInput == "4" {
-			clear = exec.Command("clear")
-			clear.Stdout = os.Stdout
-			clear.Run()
-			
-			fmt.Println("Schreiben sie bitte name des Folders, den sie durch schauen wollt")
-			fmt.Println("(Schreiben sie 0 um den Function zu beendden)")
-
-			for {
-				
-				fmt.Printf("#: ")
-
-				if !scanner.Scan() {
-					break
-				}
-
-				FolderNameReed := strings.TrimSpace(scanner.Text())
-
-				if FolderNameReed == "" {
-					fmt.Println("Sie mussen ein Pfad von Folder schreiben")
-					continue
-				}
-
-				if FolderNameReed ==  "0" {
-					break
-				}
-
-				_, errReed := os.Stat(FolderNameReed)
-				if errReed != nil {
-					fmt.Println("Der Ordner existiert nicht.")
-					continue
-				} 
-
-				entries, err := os.ReadDir(FolderNameReed)
-				if err != nil {
-					fmt.Println("Fehler beim Lessen des Ordners: ", err)
-
-				}
-
-				fmt.Printf("\nInhalt von Ordner: %s", entries)
-				fmt.Println("================================")
-
-				if len(entries) == 0 {
-					fmt.Println("(Der Ordner ist leer)")
-				} else {
-					for _, entry := range entries {
-						if entry.IsDir() {
-							fmt.Printf("[ORDNER] %s\n", entry.Name())
-						} else {
-							fmt.Printf("[DATEI] %s\n", entry.Name())
-						}
-					}
-				}
 
 			}
 		}
