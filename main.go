@@ -7,8 +7,20 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-	"log"
 )
+
+func logAction(message string) {
+	file, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("Probleme beim Loggen: ", err)
+		return
+	}
+
+	defer file.Close()
+
+	timestamp := time.Now().Format("02.01.2006 15:04:05")
+	file.WriteString(timestamp + " - " + message + "\n")
+}
 
 func main() {
 	
@@ -16,21 +28,6 @@ func main() {
 
 	for { 	
 
-		now := time.Now()
-
-		formatted := now.Format("02.01.2006 15:04:05")
-
-		file, errlog := os.OpenFile(
-			"app.log",
-			os.O_APPEND|os.O_CREATE|os.O_WRONLY,
-			0644,
-		)
-
-		if errlog != nil {
-			log.Fatal(errlog)
-		}
-
-		defer file.Close()
 
 		clear := exec.Command("clear")
 		clear.Stdout = os.Stdout
@@ -46,8 +43,6 @@ func main() {
     		break
 		}
 		UserInput := strings.TrimSpace(scanner.Text())
-
-		
 
 		if UserInput == "1" {
 
@@ -88,7 +83,7 @@ func main() {
     	    		fmt.Println("Fehler beim Erstellen bon Folder " + OrderName)
     	    	} else {
     	    		fmt.Printf("Ordner '%s', wurde erfolgreich erstellt.\n", OrderName)
-					file.WriteString( formatted + " - Folder " + OrderName + " erstellt \n")
+					logAction("Folder " + OrderName + " erstellt")
     	    	}
 
 		    }	
@@ -147,7 +142,7 @@ func main() {
 					fmt.Printf("Der File '%s' wurde erfolgreich geloscht", FolderNameDelete)
 					time.Sleep(3 * time.Second)
 
-					file.WriteString( formatted + " - Folder " + FolderNameDelete + " geloscht \n")
+					logAction("Folder " + FolderNameDelete + " gelöscht")
 					
 					clear = exec.Command("clear")
 			        clear.Stdout = os.Stdout
